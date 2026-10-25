@@ -6,8 +6,9 @@ external Discord APIs, and logging.
 
 from __future__ import annotations
 
+from .leveling import LevelingService
 from .moderation import ModerationService
 from .server import ServerService
 
-__all__ = ["ModerationService", "ServerService"]
+__all__ = ["LevelingService", "ModerationService", "ServerService"]
 

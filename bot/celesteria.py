@@ -17,8 +17,10 @@ from discord.ext import commands, tasks
 
 from bot.config import Config
 from db.database import Database
+from db.level_repository import LevelRepository
 from db.repository import ModerationRepository
 from db.server_repository import ServerRepository
+from services.leveling import LevelingService
 from services.moderation import ModerationService
 from services.server import ServerService
 from ui.formatters import format_number
@@ -32,6 +34,7 @@ INITIAL_EXTENSIONS: list[str] = [
     "cogs.core",
     "cogs.moderation",
     "cogs.server",
+    "cogs.leveling",
 ]
 
 
@@ -50,6 +53,8 @@ class Celesteria(commands.Bot):
     moderation_service: ModerationService
     server_repo: ServerRepository
     server_service: ServerService
+    level_repo: LevelRepository
+    level_service: LevelingService
 
     def __init__(self, config: Config) -> None:
         intents = discord.Intents.default()
@@ -72,6 +77,8 @@ class Celesteria(commands.Bot):
         self.moderation_service = ModerationService(self, self.moderation_repo)
         self.server_repo = ServerRepository(self.db)
         self.server_service = ServerService(self, self.server_repo)
+        self.level_repo = LevelRepository(self.db)
+        self.level_service = LevelingService(self, self.level_repo)
 
         # Presence rotation pool — {member_count} is replaced dynamically
         self._presence_pool = cycle([
@@ -120,9 +127,10 @@ class Celesteria(commands.Bot):
         # Set up tree error handler for slash command errors
         self.tree.on_error = self._on_tree_error
 
-        # Start presence rotation and server background tasks
+        # Start presence rotation, server and leveling background tasks
         self._rotate_presence.start()
         self.server_service.start()
+        self.level_service.start()
 
     # ── Events ──────────────────────────────────────────────────
 
@@ -213,6 +221,7 @@ class Celesteria(commands.Bot):
     async def close(self) -> None:
         """Gracefully shut down bot, background tasks, and database connection."""
         self.server_service.close()
+        self.level_service.close()
         try:
             await self.db.close()
         except Exception:

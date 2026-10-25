@@ -24,6 +24,8 @@ CREATE TABLE IF NOT EXISTS guild_config (
     counter_channel_id INTEGER DEFAULT NULL,
     counter_template TEXT DEFAULT '🏰 Members: {count}',
     server_log_channel_id INTEGER DEFAULT NULL,
+    leveling_enabled INTEGER DEFAULT 1,
+    levelup_channel_id INTEGER DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -49,6 +51,30 @@ CREATE INDEX IF NOT EXISTS idx_cases_guild_target
 
 CREATE INDEX IF NOT EXISTS idx_cases_guild_case_id 
     ON moderation_cases (guild_id, case_id);
+
+CREATE TABLE IF NOT EXISTS member_levels (
+    guild_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    xp INTEGER NOT NULL DEFAULT 0,
+    level INTEGER NOT NULL DEFAULT 0,
+    message_count INTEGER NOT NULL DEFAULT 0,
+    last_xp_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (guild_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS level_rewards (
+    guild_id INTEGER NOT NULL,
+    level INTEGER NOT NULL,
+    role_id INTEGER NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (guild_id, level)
+);
+
+CREATE INDEX IF NOT EXISTS idx_member_levels_leaderboard
+    ON member_levels (guild_id, xp DESC);
+
+CREATE INDEX IF NOT EXISTS idx_level_rewards_guild
+    ON level_rewards (guild_id, level ASC);
 """
 
 
@@ -73,7 +99,7 @@ class Database:
         await self._conn.execute("PRAGMA foreign_keys = ON;")
         await self._conn.executescript(SCHEMA_SQL)
 
-        # Idempotent column migrations for Phase 3
+        # Idempotent column migrations for Phase 3 and Phase 4
         async with self._conn.execute("PRAGMA table_info(guild_config);") as cursor:
             rows = await cursor.fetchall()
             existing_cols = {row["name"] for row in rows}
@@ -84,6 +110,8 @@ class Database:
             ("counter_channel_id", "INTEGER DEFAULT NULL"),
             ("counter_template", "TEXT DEFAULT '🏰 Members: {count}'"),
             ("server_log_channel_id", "INTEGER DEFAULT NULL"),
+            ("leveling_enabled", "INTEGER DEFAULT 1"),
+            ("levelup_channel_id", "INTEGER DEFAULT NULL"),
         ]
         for col_name, col_type in migrations:
             if col_name not in existing_cols:

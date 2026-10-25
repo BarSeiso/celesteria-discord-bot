@@ -8,7 +8,7 @@ Celesteria design system.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 import discord
 
@@ -254,4 +254,98 @@ class ConfirmView(discord.ui.View):
                 await self.message.edit(view=self)
             except discord.HTTPException:
                 pass
+
+
+# ── Leaderboard Pagination ──────────────────────────────────────
+
+
+class LeaderboardPaginationView(discord.ui.View):
+    """Interactive pagination view for the Royal Hall of Fame."""
+
+    def __init__(
+        self,
+        author_id: int,
+        total_pages: int,
+        page_loader: Callable[[int], Awaitable[discord.Embed]],
+        *,
+        timeout: float = 60.0,
+    ) -> None:
+        super().__init__(timeout=timeout)
+        self.author_id = author_id
+        self.total_pages = max(1, total_pages)
+        self.current_page = 1
+        self.page_loader = page_loader
+        self.message: discord.Message | None = None
+        self._update_button_states()
+
+    def _update_button_states(self) -> None:
+        """Update button enabled/disabled states and page indicator label."""
+        self.prev_button.disabled = self.current_page <= 1
+        self.page_indicator.label = f"Page {self.current_page} of {self.total_pages}"
+        self.next_button.disabled = self.current_page >= self.total_pages
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        """Only the command invoker can paginate this view."""
+        if interaction.user.id != self.author_id:
+            await interaction.response.send_message(
+                embed=CelesteriaEmbed.warning(
+                    "Not Your Menu",
+                    "This leaderboard view belongs to someone else.\n"
+                    "Use `/leaderboard` or `!cleaderboard` to open your own.",
+                ),
+                ephemeral=True,
+            )
+            return False
+        return True
+
+    @discord.ui.button(label="◀ Previous", style=discord.ButtonStyle.secondary)
+    async def prev_button(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button["LeaderboardPaginationView"],
+    ) -> None:
+        """Navigate to the previous page."""
+        if self.current_page > 1:
+            self.current_page -= 1
+            self._update_button_states()
+            embed = await self.page_loader(self.current_page)
+            await interaction.response.edit_message(embed=embed, view=self)
+        else:
+            await interaction.response.defer()
+
+    @discord.ui.button(label="Page 1 of 1", style=discord.ButtonStyle.primary, disabled=True)
+    async def page_indicator(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button["LeaderboardPaginationView"],
+    ) -> None:
+        """Static button indicating the current page."""
+        await interaction.response.defer()
+
+    @discord.ui.button(label="Next ▶", style=discord.ButtonStyle.secondary)
+    async def next_button(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button["LeaderboardPaginationView"],
+    ) -> None:
+        """Navigate to the next page."""
+        if self.current_page < self.total_pages:
+            self.current_page += 1
+            self._update_button_states()
+            embed = await self.page_loader(self.current_page)
+            await interaction.response.edit_message(embed=embed, view=self)
+        else:
+            await interaction.response.defer()
+
+    async def on_timeout(self) -> None:
+        """Disable buttons upon timeout."""
+        for item in self.children:
+            if isinstance(item, discord.ui.Button):
+                item.disabled = True
+        if self.message:
+            try:
+                await self.message.edit(view=self)
+            except discord.HTTPException:
+                pass
+
 

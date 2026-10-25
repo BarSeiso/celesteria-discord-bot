@@ -155,6 +155,8 @@ class TestWelcomeService(unittest.TestCase):
         self.assertIn("Kingdom of Celesteria", embed.description)
         self.assertIn("1,250", embed.description)
         self.assertEqual(embed.thumbnail.url, "https://example.com/avatar.png")
+        self.assertEqual(embed.footer.text, "Welcome to Kingdom of Celesteria")
+        self.assertNotIn("sunflower1y", embed.footer.text)
 
     def test_bot_sentinel_welcome_embed_formatting(self) -> None:
         bot_member = MagicMock(spec=discord.Member)
@@ -170,6 +172,8 @@ class TestWelcomeService(unittest.TestCase):
         self.assertEqual(embed.title, f"{Icon.SHIELD} Arcane Construct Registered")
         self.assertIn("automated sentinel", embed.description)
         self.assertEqual(embed.colour, Palette.INFO)
+        self.assertEqual(embed.footer.text, "Realm Sentinel")
+        self.assertNotIn("sunflower1y", embed.footer.text)
 
 
 class TestMemberCounterLogic(unittest.IsolatedAsyncioTestCase):

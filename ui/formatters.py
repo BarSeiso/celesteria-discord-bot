@@ -73,3 +73,17 @@ def format_relative(dt: datetime) -> str:
     """
     return format_timestamp(dt, "R")
 
+
+def format_progress_bar(current: int, total: int, length: int = 10) -> str:
+    """Format a clean royal progress bar with filled and empty blocks.
+
+    Example:
+        format_progress_bar(800, 1000, 10) -> '████████░░'
+    """
+    if total <= 0:
+        return "░" * length
+    fraction = max(0.0, min(1.0, current / total))
+    filled = round(fraction * length)
+    return "█" * filled + "░" * (length - filled)
+
+

@@ -86,7 +86,7 @@ class ServerService:
                 value=f"`{member.id}`",
                 inline=True,
             )
-            embed.set_footer(text=f"Realm Sentinel │ {Brand.FOOTER}")
+            embed.set_footer(text="Realm Sentinel")
             return embed
 
         template = custom_template.strip() if custom_template and custom_template.strip() else DEFAULT_WELCOME_MESSAGE
@@ -118,7 +118,7 @@ class ServerService:
             value=f"`#{member_count_str}`",
             inline=True,
         )
-        embed.set_footer(text=f"Welcome to {guild.name} │ {Brand.FOOTER}")
+        embed.set_footer(text=f"Welcome to {guild.name}")
         return embed
 
     async def dispatch_welcome(self, member: discord.Member) -> bool:
