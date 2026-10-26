@@ -340,10 +340,9 @@ class LevelingService:
     ) -> discord.Embed:
         """Create a royal level-up celebration embed."""
         title_str = get_level_title(new_level)
-        embed = CelesteriaEmbed._base(
-            Palette.WARNING,
-            title=f"{Icon.BRAND} A New Rank Has Been Earned",
-            description=(
+        embed = CelesteriaEmbed.levelup(
+            "A New Rank Has Been Earned",
+            (
                 f"Hail, {member.mention}! Through renown and service, "
                 f"you have ascended to **Level {new_level}** (*{title_str}*)."
             ),

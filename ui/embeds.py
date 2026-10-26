@@ -227,3 +227,39 @@ class CelesteriaEmbed:
             **kwargs,
         )
 
+    @classmethod
+    def levelup(
+        cls,
+        title: str,
+        description: str | None = None,
+        **kwargs: Any,
+    ) -> discord.Embed:
+        """Level-up celebration embed — WARNING (gold) color with brand icon.
+
+        Use for: rank ascensions and reward role bestowments.
+        """
+        return cls._base(
+            Palette.WARNING,
+            title=f"{Icon.BRAND} {title}",
+            description=description,
+            **kwargs,
+        )
+
+    @classmethod
+    def config_panel(
+        cls,
+        title: str,
+        description: str | None = None,
+        **kwargs: Any,
+    ) -> discord.Embed:
+        """Configuration dashboard embed — PRIMARY color with royal brand icon.
+
+        Use for: server configuration and administrative control centers.
+        """
+        return cls._base(
+            Palette.PRIMARY,
+            title=f"{Icon.BRAND} {title}",
+            description=description,
+            **kwargs,
+        )
+

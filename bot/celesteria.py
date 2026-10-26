@@ -95,8 +95,8 @@ class Celesteria(commands.Bot):
 
         Loads cogs, syncs slash commands, and starts background tasks.
         """
-        # Set up logging
-        setup_logging(self.config.log_level)
+        # Set up logging with token masking
+        setup_logging(self.config.log_level, token=self.config.token)
 
         # Initialize database
         await self.db.initialize()
@@ -173,7 +173,7 @@ class Celesteria(commands.Bot):
         error: discord.app_commands.AppCommandError,
     ) -> None:
         """Global error handler for slash (app) commands."""
-        embed = build_error_embed(error)
+        embed = build_error_embed(error, ctx=interaction)
         await send_error_response(interaction, embed)
 
     # ── Presence Rotation ───────────────────────────────────────

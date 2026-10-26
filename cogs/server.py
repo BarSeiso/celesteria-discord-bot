@@ -19,6 +19,7 @@ from discord.ext import commands
 from db.server_repository import DEFAULT_COUNTER_TEMPLATE, DEFAULT_WELCOME_MESSAGE
 from ui.embeds import CelesteriaEmbed
 from ui.theme import Brand, Icon, Palette
+from ui.views import ConfigDashboardView
 
 if TYPE_CHECKING:
     from bot.celesteria import Celesteria
@@ -294,10 +295,82 @@ class ServerCog(commands.Cog, name="Server"):
             m_val = "*Disabled / Unconfigured*"
         embed.add_field(name=f"{Icon.MODERATION} Moderation Decree Log", value=m_val, inline=False)
 
+        # Leveling & Role Rewards
+        is_lvl = getattr(config, "leveling_enabled", True) if config else True
+        lvl_status = "🟢 **Enabled**" if is_lvl else "⚪ **Disabled**"
+        lvl_chan_id = getattr(config, "levelup_channel_id", None) if config else None
+        if lvl_chan_id == -1:
+            lvl_chan_str = "Muted Throughout Realm"
+        elif lvl_chan_id:
+            c = ctx.guild.get_channel(lvl_chan_id)
+            lvl_chan_str = c.mention if c else f"`ID: {lvl_chan_id}`"
+        else:
+            lvl_chan_str = "Active Chat Channel"
+        embed.add_field(
+            name=f"{Icon.CROWN} Leveling Progression",
+            value=f"Status: {lvl_status}\n└ *Announcements: {lvl_chan_str}*",
+            inline=False,
+        )
+
+        rewards = await self.bot.level_repo.get_level_rewards(ctx.guild.id)
+        r_val = f"**{len(rewards)}** tiers configured (`/levelrewards`)" if rewards else "*None configured* (`/setlevelreward`)"
+        embed.add_field(
+            name=f"{Icon.SHIELD} Royal Role Rewards",
+            value=r_val,
+            inline=False,
+        )
+
         if ctx.guild.icon:
             embed.set_thumbnail(url=ctx.guild.icon.url)
-        embed.set_footer(text=f"Guild ID: {ctx.guild.id} │ {Brand.FOOTER}")
+        embed.set_footer(text=f"Tip: Use /config for interactive control │ Guild ID: {ctx.guild.id} │ {Brand.FOOTER}")
 
+        await ctx.send(embed=embed)
+
+    # ── /config · !cconfig ──────────────────────────────────────
+
+    @commands.hybrid_command(
+        name="config",
+        description="Open the Royal Realm Configuration dashboard",
+    )
+    @commands.guild_only()
+    @commands.has_permissions(manage_guild=True)
+    @app_commands.default_permissions(manage_guild=True)
+    async def config_dashboard(self, ctx: commands.Context[Celesteria]) -> None:
+        """Open the interactive Royal Realm Configuration control center."""
+        assert ctx.guild is not None
+        view = ConfigDashboardView(self.bot, ctx.guild, author_id=ctx.author.id)
+        embed = await view.render_embed()
+        msg = await ctx.send(embed=embed, view=view)
+        view.message = msg
+
+    # ── /toggleveling · !ctoggleveling ──────────────────────────
+
+    @commands.hybrid_command(
+        name="toggleveling",
+        description="Toggle leveling progression on or off for this realm",
+    )
+    @commands.guild_only()
+    @commands.has_permissions(manage_guild=True)
+    @app_commands.default_permissions(manage_guild=True)
+    async def toggleveling(self, ctx: commands.Context[Celesteria]) -> None:
+        """Toggle XP accumulation and rank advancement in this server."""
+        assert ctx.guild is not None
+        current = await self.bot.level_repo.is_leveling_enabled(ctx.guild.id)
+        new_state = not current
+
+        await self.bot.server_repo.set_leveling_enabled(ctx.guild.id, new_state)
+        await self.bot.level_repo.set_leveling_enabled(ctx.guild.id, new_state)
+
+        status_str = "**Enabled**" if new_state else "**Disabled**"
+        action_desc = (
+            "Citizens will now accumulate renown through conversation."
+            if new_state
+            else "Renown accumulation and level advancement have been paused throughout the realm."
+        )
+        embed = CelesteriaEmbed.success(
+            f"Leveling System {status_str}",
+            action_desc,
+        )
         await ctx.send(embed=embed)
 
     # ── Gateway Event Listeners ─────────────────────────────────

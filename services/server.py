@@ -447,13 +447,28 @@ class ServerService:
         await self.dispatch_server_log(role.guild, embed)
 
     async def log_role_delete(self, role: discord.Role) -> None:
-        """Log a role deletion."""
+        """Log a role deletion and prune associated level rewards."""
+        removed_count = await self.bot.level_repo.remove_reward_by_role_id(role.guild.id, role.id)
+        if removed_count:
+            log.info(
+                "Pruned %d level reward(s) associated with deleted role %d in guild %d",
+                removed_count,
+                role.id,
+                role.guild.id,
+            )
+
         embed = CelesteriaEmbed.server_log(
             title="Role Deleted",
             description=f"Role **@{role.name}** (`{role.id}`) has been deleted.",
             colour=Palette.WARNING,
             icon=Icon.SHIELD,
         )
+        if removed_count:
+            embed.add_field(
+                name="Level Rewards Pruned",
+                value=f"Removed **{removed_count}** level reward tier(s) bound to this role.",
+                inline=False,
+            )
         await self.dispatch_server_log(role.guild, embed)
 
     async def log_role_update(self, before: discord.Role, after: discord.Role) -> None:
@@ -490,7 +505,16 @@ class ServerService:
         await self.dispatch_server_log(channel.guild, embed)
 
     async def log_channel_delete(self, channel: discord.abc.GuildChannel) -> None:
-        """Log a channel deletion."""
+        """Log a channel deletion and automatically unbind any configured settings."""
+        cleared = await self.repo.clear_channel_binding(channel.guild.id, channel.id)
+        if cleared:
+            log.info(
+                "Unbound deleted channel %d in guild %d from: %s",
+                channel.id,
+                channel.guild.id,
+                cleared,
+            )
+
         embed = CelesteriaEmbed.server_log(
             title="Channel Deleted",
             description=f"Channel **#{channel.name}** (`{channel.id}`) was deleted.",
@@ -498,6 +522,12 @@ class ServerService:
             icon=Icon.CASTLE,
         )
         embed.add_field(name="Type", value=f"`{str(channel.type)}`", inline=True)
+        if cleared:
+            embed.add_field(
+                name="Config Cleared",
+                value=f"Automatically unbound from: `{', '.join(cleared)}`",
+                inline=False,
+            )
         await self.dispatch_server_log(channel.guild, embed)
 
     async def log_channel_update(

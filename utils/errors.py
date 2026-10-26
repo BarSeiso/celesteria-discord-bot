@@ -11,6 +11,7 @@ import logging
 import secrets
 
 import discord
+from discord import app_commands
 from discord.ext import commands
 
 from ui.embeds import CelesteriaEmbed
@@ -28,67 +29,125 @@ def generate_error_id() -> str:
 
 def build_error_embed(
     error: Exception,
-    ctx: commands.Context | None = None,
+    ctx: commands.Context | discord.Interaction | None = None,
 ) -> discord.Embed:
     """Create an appropriate themed embed for a command error.
 
-    Routes known error types to specific messages. Unknown errors
-    get a generic message with an Error ID for support tracking.
+    Routes known error types (both prefix and app/slash commands) to specific
+    user-friendly messages. Unknown errors get a generic royal message with an
+    Error ID for support tracking.
 
     Returns:
         A ``discord.Embed`` ready to send to the user.
     """
-    # Unwrap wrapped errors (hybrid commands wrap the original)
+    # Unwrap wrapped errors (hybrid commands or command invoke errors wrap the original)
     original = getattr(error, "original", error)
 
-    if isinstance(original, commands.MissingPermissions):
-        missing = ", ".join(original.missing_permissions)
+    # ── Permission & Role Hierarchy Errors ──────────────────────
+    if isinstance(original, (commands.MissingPermissions, app_commands.MissingPermissions)):
+        missing_perms = [p.replace("_", " ").title() for p in original.missing_permissions]
+        missing_str = ", ".join(missing_perms)
         return CelesteriaEmbed.permission_denied(
-            f"You need the following permissions: **{missing}**"
+            f"You require the following permission{'s' if len(missing_perms) > 1 else ''}: **{missing_str}**"
         )
 
-    if isinstance(original, commands.BotMissingPermissions):
-        missing = ", ".join(original.missing_permissions)
+    if isinstance(original, (commands.BotMissingPermissions, app_commands.BotMissingPermissions)):
+        missing_perms = [p.replace("_", " ").title() for p in original.missing_permissions]
+        missing_str = ", ".join(missing_perms)
         return CelesteriaEmbed.error(
             "Bot Missing Permissions",
-            f"I need the following permissions to do that: **{missing}**",
+            f"I require the following permission{'s' if len(missing_perms) > 1 else ''} to execute this decree: **{missing_str}**",
         )
 
+    if isinstance(original, PermissionError):
+        # Domain services raise PermissionError with descriptive hierarchy messages
+        return CelesteriaEmbed.permission_denied(str(original))
+
+    if isinstance(original, discord.Forbidden):
+        return CelesteriaEmbed.error(
+            "Access Denied by Discord",
+            "Discord rejected this action due to missing bot permissions or role hierarchy restrictions in this server.",
+        )
+
+    if isinstance(original, discord.NotFound):
+        return CelesteriaEmbed.warning(
+            "Resource Not Found",
+            "The requested Discord channel, message, role, or member no longer exists.",
+        )
+
+    # ── Cooldowns ───────────────────────────────────────────────
+    if isinstance(original, (commands.CommandOnCooldown, app_commands.CommandOnCooldown)):
+        return CelesteriaEmbed.warning(
+            "Command on Cooldown",
+            f"Please wait **{original.retry_after:.1f}s** before invoking this decree again.",
+        )
+
+    # ── Argument & Resolution Errors ────────────────────────────
     if isinstance(original, commands.MissingRequiredArgument):
         usage = ""
-        if ctx and ctx.command:
-            usage = (
-                f"\n\nUsage: `{ctx.prefix}{ctx.command.qualified_name}"
-                f" {ctx.command.signature}`"
-            )
+        if isinstance(ctx, commands.Context) and ctx.command:
+            usage = f"\n\nUsage: `{ctx.prefix}{ctx.command.qualified_name} {ctx.command.signature}`"
         return CelesteriaEmbed.warning(
             "Missing Argument",
             f"The `{original.param.name}` argument is required.{usage}",
         )
 
-    if isinstance(original, commands.BadArgument):
+    if isinstance(original, commands.MemberNotFound):
+        return CelesteriaEmbed.warning(
+            "Member Not Found",
+            f"Could not locate member `{original.argument}` in this server.",
+        )
+
+    if isinstance(original, commands.UserNotFound):
+        return CelesteriaEmbed.warning(
+            "User Not Found",
+            f"Could not locate user `{original.argument}`.",
+        )
+
+    if isinstance(original, commands.ChannelNotFound):
+        return CelesteriaEmbed.warning(
+            "Channel Not Found",
+            f"Could not locate channel `{original.argument}` in this server.",
+        )
+
+    if isinstance(original, commands.RoleNotFound):
+        return CelesteriaEmbed.warning(
+            "Role Not Found",
+            f"Could not locate role `{original.argument}` in this server.",
+        )
+
+    if isinstance(original, commands.RangeError):
+        return CelesteriaEmbed.warning(
+            "Value Out of Range",
+            str(original),
+        )
+
+    if isinstance(original, (commands.BadArgument, app_commands.TransformerError)):
         return CelesteriaEmbed.warning(
             "Invalid Argument",
             str(original),
         )
 
-    if isinstance(original, commands.CommandOnCooldown):
-        return CelesteriaEmbed.warning(
-            "Command on Cooldown",
-            f"Please wait **{original.retry_after:.1f}s** before using this again.",
-        )
-
+    # ── Checks & Restrictions ───────────────────────────────────
     if isinstance(original, commands.NotOwner):
         return CelesteriaEmbed.permission_denied(
-            "This command is restricted to the bot owner."
+            "This command is restricted to the bot sovereign."
         )
 
-    if isinstance(original, commands.CheckFailure):
-        return CelesteriaEmbed.permission_denied()
+    if isinstance(original, (commands.CheckFailure, app_commands.CheckFailure)):
+        return CelesteriaEmbed.permission_denied(
+            "You do not meet the prerequisites to execute this command."
+        )
 
-    # ── Unexpected error ────────────────────────────────────────
+    # ── Unexpected Errors ───────────────────────────────────────
     error_id = generate_error_id()
-    cmd_name = ctx.command.qualified_name if ctx and ctx.command else "unknown"
+    if isinstance(ctx, commands.Context) and ctx.command:
+        cmd_name = ctx.command.qualified_name
+    elif isinstance(ctx, discord.Interaction) and ctx.command:
+        cmd_name = ctx.command.qualified_name
+    else:
+        cmd_name = "unknown"
+
     log.error(
         "Unhandled error [%s] in command '%s': %s",
         error_id,
@@ -99,7 +158,7 @@ def build_error_embed(
     return CelesteriaEmbed.error(
         "Something Went Wrong",
         "An unexpected error occurred while processing that command.\n"
-        "This has been logged for investigation.",
+        "This incident has been recorded in the royal chronicles for investigation.",
         error_id=error_id,
     )
 
@@ -123,4 +182,3 @@ async def send_error_response(
             await target.send(embed=embed)
     except discord.HTTPException:
         pass
-

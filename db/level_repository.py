@@ -65,6 +65,14 @@ class LevelRepository:
 
     def __init__(self, db: Database) -> None:
         self.db = db
+        self._enabled_cache: dict[int, bool] = {}
+
+    def invalidate_cache(self, guild_id: int | None = None) -> None:
+        """Invalidate in-memory leveling toggle cache."""
+        if guild_id is not None:
+            self._enabled_cache.pop(guild_id, None)
+        else:
+            self._enabled_cache.clear()
 
     # ── Member Progression ──────────────────────────────────────
 
@@ -186,18 +194,32 @@ class LevelRepository:
         await self.db.execute(sql, (guild_id, level))
         return True
 
+    async def remove_reward_by_role_id(self, guild_id: int, role_id: int) -> int:
+        """Remove any level rewards bound to a specific role ID. Returns count deleted."""
+        sql = "DELETE FROM level_rewards WHERE guild_id = ? AND role_id = ?"
+        cursor = await self.db.execute(sql, (guild_id, role_id))
+        return cursor.rowcount
+
     # ── Leveling Configuration ──────────────────────────────────
 
     async def is_leveling_enabled(self, guild_id: int) -> bool:
-        """Check whether the leveling progression system is enabled for a guild."""
+        """Check whether the leveling progression system is enabled for a guild (cached)."""
+        if guild_id in self._enabled_cache:
+            return self._enabled_cache[guild_id]
+
         sql = "SELECT leveling_enabled FROM guild_config WHERE guild_id = ?"
         row = await self.db.fetchone(sql, (guild_id,))
         if row and row["leveling_enabled"] is not None:
-            return bool(row["leveling_enabled"])
-        return True  # Default enabled
+            enabled = bool(row["leveling_enabled"])
+        else:
+            enabled = True  # Default enabled
+
+        self._enabled_cache[guild_id] = enabled
+        return enabled
 
     async def set_leveling_enabled(self, guild_id: int, enabled: bool) -> None:
         """Toggle leveling progression for a guild."""
+        self._enabled_cache[guild_id] = enabled
         val = 1 if enabled else 0
         sql = """
             INSERT INTO guild_config (guild_id, leveling_enabled, updated_at)

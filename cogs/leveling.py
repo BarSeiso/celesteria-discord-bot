@@ -231,7 +231,7 @@ class LevelingCog(commands.Cog, name="Social"):
                 lines.append(f"• **Level {r.level}** → `Deleted Role ({r.role_id})`")
 
         embed = CelesteriaEmbed.standard(
-            f"Royal Decrees — Level Rewards",
+            "Royal Bestowments — Level Rewards",
             f"Role honors automatically bestowed upon reaching level tiers:\n\n"
             + "\n".join(lines),
         )
