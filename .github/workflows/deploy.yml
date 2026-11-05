@@ -1,0 +1,24 @@
+
+name: Deploy Celesteria
+
+on:
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trigger Raznar Deployment
+        env:
+          WEBHOOK_URL: ${{ secrets.RAZNAR_WEBHOOK_URL }}
+          WEBHOOK_TOKEN: ${{ secrets.RAZNAR_WEBHOOK_TOKEN }}
+        run: |
+          curl --fail-with-body --show-error --silent \
+            --request POST \
+            --header "X-Webhook-Token: $WEBHOOK_TOKEN" \
+            "$WEBHOOK_URL"
